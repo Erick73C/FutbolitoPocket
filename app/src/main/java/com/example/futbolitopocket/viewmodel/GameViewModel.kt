@@ -7,47 +7,60 @@ import com.example.futbolitopocket.data.Obstacle
 
 class GameViewModel : ViewModel() {
 
-    val obstacles = listOf(
-
-        // zona superior
-        Obstacle(200f, 200f, 80f, 40f),
-        Obstacle(500f, 200f, 80f, 40f),
-        Obstacle(800f, 200f, 80f, 40f),
-
-        Obstacle(150f, 350f, 80f, 40f),
-        Obstacle(450f, 350f, 80f, 40f),
-        Obstacle(750f, 350f, 80f, 40f),
-
-        // zona media
-        Obstacle(250f, 600f, 80f, 40f),
-        Obstacle(550f, 600f, 80f, 40f),
-
-        Obstacle(150f, 800f, 80f, 40f),
-        Obstacle(450f, 800f, 80f, 40f),
-        Obstacle(750f, 800f, 80f, 40f),
-
-        // zona inferior
-        Obstacle(200f, 1050f, 80f, 40f),
-        Obstacle(500f, 1050f, 80f, 40f),
-        Obstacle(800f, 1050f, 80f, 40f),
-
-        Obstacle(150f, 1200f, 80f, 40f),
-        Obstacle(450f, 1200f, 80f, 40f),
-        Obstacle(750f, 1200f, 80f, 40f)
-    )
+    var obstacles = listOf<Obstacle>()
+        private set
     var gameState = mutableStateOf(GameState())
         private set
 
-    private val ballRadius = 30f
+    private val ballRadius = 25f
+
+    fun initializeGame(fieldWidth: Float, fieldHeight: Float) {
+        val goalWidth = fieldWidth * 0.3f
+        val goalLeft = (fieldWidth - goalWidth) / 2
+        val goalRight = goalLeft + goalWidth
+
+        // Generamos obstáculos proporcionales
+        obstacles = listOf(
+            // --- BORDES SUPERIORES (Dejan el hueco de la portería) ---
+            Obstacle(0f, 0f, goalLeft - 10f, 20f),
+            Obstacle(goalRight + 10f, 0f, fieldWidth - goalRight, 20f),
+
+            // --- BORDES INFERIORES ---
+            Obstacle(0f, fieldHeight - 20f, goalLeft - 10f, 20f),
+            Obstacle(goalRight + 10f, fieldHeight - 20f, fieldWidth - goalRight, 20f),
+
+            // --- DETALLES LATERALES (Los pasillos de la imagen) ---
+            Obstacle(fieldWidth * 0.1f, fieldHeight * 0.15f, 25f, fieldHeight * 0.25f), // Izq arriba
+            Obstacle(fieldWidth * 0.85f, fieldHeight * 0.15f, 25f, fieldHeight * 0.25f), // Der arriba
+            Obstacle(fieldWidth * 0.1f, fieldHeight * 0.6f, 25f, fieldHeight * 0.25f),  // Izq abajo
+            Obstacle(fieldWidth * 0.85f, fieldHeight * 0.6f, 25f, fieldHeight * 0.25f),  // Der abajo
+
+            // --- BLOQUES CENTRALES LATERALES ---
+            Obstacle(0f, fieldHeight / 2 - 60f, fieldWidth * 0.15f, 30f),
+            Obstacle(fieldWidth * 0.85f, fieldHeight / 2 - 60f, fieldWidth * 0.15f, 30f),
+            Obstacle(0f, fieldHeight / 2 + 30f, fieldWidth * 0.15f, 30f),
+            Obstacle(fieldWidth * 0.85f, fieldHeight / 2 + 30f, fieldWidth * 0.15f, 30f),
+
+            // --- ISLAS CERCA DEL CENTRO (Respetando el círculo) ---
+            Obstacle(fieldWidth * 0.25f, fieldHeight * 0.4f, 80f, 30f),
+            Obstacle(fieldWidth * 0.65f, fieldHeight * 0.4f, 80f, 30f),
+            Obstacle(fieldWidth * 0.25f, fieldHeight * 0.55f, 80f, 30f),
+            Obstacle(fieldWidth * 0.65f, fieldHeight * 0.55f, 80f, 30f),
+
+            // --- DEFENSAS DE PORTERÍA ---
+            Obstacle(fieldWidth / 2 - 40f, fieldHeight * 0.2f, 80f, 25f), // Defensa arriba
+            Obstacle(fieldWidth / 2 - 40f, fieldHeight * 0.75f, 80f, 25f) // Defensa abajo
+        )
+
+        initializeBall(fieldWidth, fieldHeight)
+    }
 
     fun initializeBall(fieldWidth: Float, fieldHeight: Float) {
-
-        val centerX = fieldWidth / 2
-        val centerY = fieldHeight / 2
-
         gameState.value = gameState.value.copy(
-            ballX = centerX,
-            ballY = centerY
+            ballX = fieldWidth / 2,
+            ballY = fieldHeight / 2,
+            velocityX = 0f,
+            velocityY = 0f
         )
     }
 
@@ -57,56 +70,69 @@ class GameViewModel : ViewModel() {
         fieldWidth: Float,
         fieldHeight: Float
     ) {
-
+        val goalWidth = fieldWidth * 0.3f
+        val goalLeft = (fieldWidth - goalWidth) / 2
+        val goalRight = goalLeft + goalWidth
         val current = gameState.value
 
-        var velocityX = current.velocityX + (-accelX * 0.6f)
-        var velocityY = current.velocityY + (accelY * 0.6f)
+        // 1. Calculamos la velocidad actual sumando la aceleración
+        var newVelocityX = current.velocityX + (-accelX * 0.6f)
+        var newVelocityY = current.velocityY + (accelY * 0.6f)
 
-        var ballX = current.ballX + velocityX
-        var ballY = current.ballY + velocityY
+        // 2. Calculamos la posición a la que intenta ir la pelota
+        var newBallX = current.ballX + newVelocityX
+        var newBallY = current.ballY + newVelocityY
 
-        // Rebote en paredes
-        if (ballX < ballRadius || ballX > fieldWidth - ballRadius) {
-            velocityX *= -1
+        // 3. Rebote en paredes laterales (Eje X)
+        if (newBallX < ballRadius || newBallX > fieldWidth - ballRadius) {
+            newVelocityX *= -0.8f
+            newBallX = current.ballX + newVelocityX
         }
 
-        if (ballY < ballRadius || ballY > fieldHeight - ballRadius) {
-            velocityY *= -1
-        }
-
-        ballX = ballX.coerceIn(ballRadius, fieldWidth - ballRadius)
-        ballY = ballY.coerceIn(ballRadius, fieldHeight - ballRadius)
-        // Colisión con obstáculos
-        for (obstacle in obstacles) {
-
-            val left = obstacle.x
-            val right = obstacle.x + obstacle.width
-            val top = obstacle.y
-            val bottom = obstacle.y + obstacle.height
-
-            if (
-                ballX + ballRadius > left &&
-                ballX - ballRadius < right &&
-                ballY + ballRadius > top &&
-                ballY - ballRadius < bottom
-            ) {
-
-                // Rebote simple
-                velocityX *= -1
-                velocityY *= -1
-
-                // Empujar pelota fuera del obstáculo
-                ballX += velocityX
-                ballY += velocityY
+        // 4. Lógica de Goles y Rebote en bordes (Eje Y)
+        if (newBallY < ballRadius) {
+            if (newBallX > goalLeft && newBallX < goalRight) {
+                gameState.value = current.copy(scoreBottom = current.scoreBottom + 1)
+                initializeBall(fieldWidth, fieldHeight)
+                return
+            } else {
+                newVelocityY *= -0.8f
+                newBallY = current.ballY + newVelocityY
+            }
+        } else if (newBallY > fieldHeight - ballRadius) {
+            if (newBallX > goalLeft && newBallX < goalRight) {
+                gameState.value = current.copy(scoreTop = current.scoreTop + 1)
+                initializeBall(fieldWidth, fieldHeight)
+                return
+            } else {
+                newVelocityY *= -0.8f
+                newBallY = current.ballY + newVelocityY
             }
         }
 
+        // 5. COLISIÓN CON OBSTÁCULOS
+        for (obstacle in obstacles) {
+            if (newBallX + ballRadius > obstacle.x &&
+                newBallX - ballRadius < obstacle.x + obstacle.width &&
+                newBallY + ballRadius > obstacle.y &&
+                newBallY - ballRadius < obstacle.y + obstacle.height) {
+
+                // Si hay choque, invertimos velocidad
+                newVelocityX *= -0.7f
+                newVelocityY *= -0.7f
+
+                // Movemos la pelota fuera del obstáculo para que no se quede pegada
+                newBallX = current.ballX + newVelocityX
+                newBallY = current.ballY + newVelocityY
+            }
+        }
+
+        //ACTUALIZAR ESTADO
         gameState.value = current.copy(
-            ballX = ballX,
-            ballY = ballY,
-            velocityX = velocityX * 0.98f,
-            velocityY = velocityY * 0.98f
+            ballX = newBallX.coerceIn(ballRadius, fieldWidth - ballRadius),
+            ballY = newBallY.coerceIn(ballRadius, fieldHeight - ballRadius),
+            velocityX = newVelocityX * 0.98f, // Fricción
+            velocityY = newVelocityY * 0.98f
         )
     }
 }
